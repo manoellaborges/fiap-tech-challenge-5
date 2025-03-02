@@ -1,12 +1,10 @@
 import re
 
 import spacy
-from sklearn.metrics.pairwise import cosine_similarity
-from collections import defaultdict
 import os
 import sys
-import unicodedata
 from textblob import TextBlob
+import pandas as pd
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from src.functions import load_item_data
@@ -60,27 +58,41 @@ def limpar_texto(texto):
         return texto
     else:
         return None
+
+def extract_info_from_url(url):
+    parts = url.split('/')
+
+    if len(parts) > 4:
+        return [parts[3], parts[4]]
+    elif len(parts) > 3:
+        return [parts[3]]
+    
+    return None
     
 output_dir = os.path.join(os.path.dirname(__file__), '../../processed_data')
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
-i = 0
+
 for df_item in load_item_data():
-    print('inicio')
-    print(len(df_item))
-    # df_item = df_item.fillna('')
-    # df_item = df_item.drop_duplicates()
-    # df_item['title'] = df_item['title'].apply(limpar_texto)
-    # df_item['body'] = df_item['body'].apply(limpar_texto)
-    # df_item['caption'] = df_item['caption'].apply(limpar_texto)
-    # df_item['sentimento_titulo'] = df_item['title'].apply(analisar_sentimento)
-    # df_item['sentimento_corpo'] = df_item['body'].apply(analisar_sentimento)
-    # df_item['palavras_chave'] = ''
+    df_item = df_item.fillna('')
+    df_item = df_item.drop_duplicates()
+    df_item['title'] = df_item['title'].apply(limpar_texto)
+    df_item['body'] = df_item['body'].apply(limpar_texto)
+    df_item['caption'] = df_item['caption'].apply(limpar_texto)
+    df_item['sentimento_titulo'] = df_item['title'].apply(analisar_sentimento)
+    df_item['sentimento_corpo'] = df_item['body'].apply(analisar_sentimento)
+    df_item['palavras_chave'] = ''
 
-    # for index, row in df_item.iterrows():
-    #     resultado = taggiar_noticia(row['title'], row['body'], row['caption'])
-    #     df_item.at[index, 'palavras_chave'] = resultado['tags']
+    for index, row in df_item.iterrows():
+        resultado = taggiar_noticia(row['title'], row['body'], row['caption'])
+        df_item.at[index, 'palavras_chave'] = resultado['tags']
 
-    # df_item.to_csv(f'{output_dir}/item_data{i}.csv', index=False)
-    i+=0
+
+df_item['palavras_chave'] = df_item['palavras_chave'].apply(lambda x: eval(x) if isinstance(x, str) else x)
+df_item['palavras_chave']+= df_item['url'].apply(extract_info_from_url)
+df_item['issued'] = pd.to_datetime(df_item['issued'], errors='coerce').dt.tz_localize(None)
+df_item['recencia'] = (pd.Timestamp('now') - df_item['issued']).dt.days
+
+df_item.to_csv(f'{output_dir}/itens.csv', index=False)
+print("Script de pré-processamento concluído com sucesso!")
